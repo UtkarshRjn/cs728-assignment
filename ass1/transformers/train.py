@@ -22,7 +22,8 @@ def train2(model, data_loader, optimizer, device):
     total_loss = 0
     for batch in tqdm(data_loader, desc=f"Training"):
         optimizer.zero_grad()
-        outputs = model(**batch)
+        batch_on_device = {key: value.to(device) for key, value in batch.items()}
+        outputs = model(**batch_on_device)
         loss = outputs.loss
         
         total_loss += loss.item()
