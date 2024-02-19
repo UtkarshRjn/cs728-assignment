@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, TensorDataset
-from dataset import TripleDataset
+from dataset import *
 
 def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=32):
     """
@@ -67,7 +67,7 @@ def batch_predict_triplet_scores(model, tokenizer, triplets, device, batch_size=
     """
     
     # Create TensorDataset and DataLoader for efficient batch processing
-    dataset = TripleDataset(triplets, tokenizer, max_length=128)
+    dataset = TripletDataset(triplets, tokenizer)
     dataloader = DataLoader(dataset, batch_size=batch_size)
 
     # Store predictions
@@ -76,11 +76,12 @@ def batch_predict_triplet_scores(model, tokenizer, triplets, device, batch_size=
     # Disable gradient calculation for evaluation
     with torch.no_grad():
         for batch in dataloader:
-            input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-            
-            outputs = model(input_ids, attention_mask=attention_mask)
-            logits = outputs.logits
+            input_ids, target = batch
+            input_ids = input_ids.transpose(0, 1)
+            input_ids = input_ids.to(device)
+            target = target.to(device)
+            output = model(input_ids)
+            logits = output
             all_logits.append(logits)
 
     # Concatenate all logits from each batch
@@ -92,13 +93,13 @@ def evaluate_model2( model, tokenizer, test_data, entity_list, device):
     hits_at_1 = 0
     hits_at_10 = 0
     reciprocal_ranks = []
-    average_precisions = []  # List to hold the average precision for each query
+    average_precisions = []  
 
     # Iterate through each test triplet
-    for s, r, o in test_data:
+    for s, r, o in tqdm(test_data, desc="Evaluating"):
         # Prepare the masked queries
-        masked_head_query = f"[CLS] [MASK] [SEP] {r} [SEP] {o} [END]"
-        masked_tail_query = f"[CLS] {s} [SEP] {r} [SEP] [MASK] [END]"
+        masked_head_query = f"[CLS] [MASK] [SEP1] {r} [SEP2] {o} [END]"
+        masked_tail_query = f"[CLS] {s} [SEP1] {r} [SEP2] [MASK] [END]"
 
         # Predict the ranking for the masked head entity
         head_predictions = model_predict(masked_head_query, entity_list, model, tokenizer, device)
@@ -132,6 +133,7 @@ def evaluate_model2( model, tokenizer, test_data, entity_list, device):
     }
 
 
+
 def model_predict(masked_query, entity_list, model, tokenizer, device):
     """
     Predicts the ranking of entities for a masked query.
@@ -139,7 +141,7 @@ def model_predict(masked_query, entity_list, model, tokenizer, device):
     Args:
     - masked_query (str): The input text with one entity masked.
     - entity_list (list): List of all possible entity IDs (strings).
-    - model (transformers.PreTrainedModel): The trained model.
+    - model (ModifiedTransformerModel): The trained model.
     - tokenizer (transformers.PreTrainedTokenizer): The tokenizer.
     - device (torch.device): The device to run the prediction on.
 
@@ -148,25 +150,22 @@ def model_predict(masked_query, entity_list, model, tokenizer, device):
     """
 
     # Tokenize the input
-    inputs = tokenizer(masked_query, return_tensors='pt', padding=True, truncation=True, max_length=128)
-    input_ids = inputs['input_ids'].to(device)
-    attention_mask = inputs['attention_mask'].to(device)
-
+    input_ids = tokenizer.tokenize(masked_query)
+    input_ids = torch.tensor(input_ids).unsqueeze(0)
     # Get model predictions
     with torch.no_grad():
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-        logits = outputs.logits  # Shape: (batch_size, seq_length, vocab_size)
+        logits = model(input_ids)
 
     # Identify the masked position index
-    mask_token_index = (input_ids == tokenizer.mask_token_id).nonzero(as_tuple=True)[1]
+    mask_token_index = input_ids[0].tolist().index(tokenizer.mask_token_id)
 
     # Extract logits for the masked position; shape: (vocab_size,)
-    mask_logits = logits[0, mask_token_index.item(), :]
+    mask_logits = logits[0, mask_token_index, :]
 
     # Score each entity in the entity list
     entity_scores = []
     for entity_id in entity_list:
-        entity_token_id = tokenizer.convert_tokens_to_ids(entity_id)
+        entity_token_id = tokenizer.token2idx[entity_id]
         entity_score = mask_logits[entity_token_id].item()  # Logit for the entity
         entity_scores.append((entity_id, entity_score))
 
@@ -174,3 +173,4 @@ def model_predict(masked_query, entity_list, model, tokenizer, device):
     ranked_entities = sorted(entity_scores, key=lambda x: x[1], reverse=True)
 
     return ranked_entities
+
