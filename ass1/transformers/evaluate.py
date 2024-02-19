@@ -61,9 +61,6 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
         "MAP": map_score,
     }
 
-# Note: Ensure that batch_predict_triplet_scores returns the logits or probabilities for each entity prediction.
-# Adjust the score extraction and ranking calculation as necessary based on your model's output format.
-
 def batch_predict_triplet_scores(model, tokenizer, triplets, device, batch_size=32):
     """
     Predict scores for a batch of triplets.
@@ -90,9 +87,6 @@ def batch_predict_triplet_scores(model, tokenizer, triplets, device, batch_size=
     all_logits = torch.cat(all_logits, dim=0)
     
     return all_logits
-# Example usage (assuming you have `model`, `tokenizer`, `test_data`, and `entity_list` defined)
-# metrics = evaluate_model(model, tokenizer, test_data, entity_list)
-# print(metrics)
 
 def evaluate_model2( model, tokenizer, test_data, entity_list, device):
     hits_at_1 = 0

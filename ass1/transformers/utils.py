@@ -35,6 +35,6 @@ def build_data(name, path = '/home/utkarsh/Documents/iitb/cs728/ass1/datasets/')
 	valid_triples =  load_triples_from_txt([folder + 'valid.txt'], parse_line = parse_line)
 	test_triples =  load_triples_from_txt([folder + 'test.txt'], parse_line = parse_line)
 
-	return train_triples[:100], valid_triples[:50], test_triples[:10]
+	return train_triples, valid_triples, test_triples
 
 
