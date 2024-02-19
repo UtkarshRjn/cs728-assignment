@@ -11,7 +11,7 @@ def parse_line(filename, line,i):
 
 def load_triples_from_txt(filenames, parse_line = parse_line):
 	"""
-	Take a list of file names and build the corresponding dictionnary of triples
+	Take a list of file names and build the corresponding list of triples
 	"""
 
 	data = []

@@ -14,35 +14,6 @@ from train import *
 from evaluate import *
 from utils import *
 
-class CustomBertForSequenceClassification(nn.Module):
-    def __init__(self, config):
-        super(CustomBertForSequenceClassification, self).__init__()
-        self.num_labels = config.num_labels
-        
-        # Initialize the BERT model with the given config
-        self.bert = BertModel(config)
-        
-        # Custom classifier for sequence classification on top of BERT
-        self.classifier = nn.Linear(config.hidden_size, self.num_labels)
-        
-        # You might want to add more layers here depending on your use case
-
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, inputs_embeds=None, labels=None):
-        # Get the outputs from the BERT model
-        outputs = self.bert(input_ids,
-                            attention_mask=attention_mask,
-                            token_type_ids=token_type_ids,
-                            position_ids=position_ids,
-                            head_mask=head_mask,
-                            inputs_embeds=inputs_embeds)
-        
-        pooled_output = outputs[1]
-
-        # Apply the classification head
-        logits = self.classifier(pooled_output)
-
-        return logits
-
 if __name__ =="__main__":
     
     cur_path = os.path.dirname(os.path.realpath( os.path.basename(__file__)))
@@ -66,9 +37,9 @@ if __name__ =="__main__":
         # val_dataset = TripleDataset(val_triples, tokenizer, max_length=128)
         # test_dataset = TripleDataset(test_triples, tokenizer, max_length=128)
     
-        config = BertConfig()
+        config = BertConfig() # You can also change the architecture using this config class
         config.num_labels = 1
-        model = CustomBertForSequenceClassification(config)
+        model = BertForSequenceClassification(config=config)
         train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
     
     else:
