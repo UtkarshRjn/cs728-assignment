@@ -120,6 +120,8 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
     reciprocal_ranks = []
     average_precisions = []  
 
+    num_examples_processed = 0
+
     # Iterate through test data in batches
     for i in tqdm(range(0, len(test_data), batch_size), desc="Evaluating"):
         batch_data = test_data[i:i+batch_size]

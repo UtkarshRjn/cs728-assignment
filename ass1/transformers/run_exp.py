@@ -7,9 +7,9 @@ import torch
 
 from dataset import *
 from train import *
-from evaluate import *
+from evaluation import *
 from utils import *
-from model import *
+from models import *
 from tokenizer import *
 
 if __name__ =="__main__":
