@@ -68,8 +68,8 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
     map_score = np.mean(average_precisions)
 
     return {
-        "HITS@1": hits_at_1,
-        "HITS@10": hits_at_10,
+        "HITS@1": final_hits_at_1,
+        "HITS@10": final_hits_at_10,
         "MRR": mrr,
         "MAP": map_score,
     }
@@ -145,8 +145,8 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
     total_examples = 2 * len(test_data)  # Each test triplet results in two queries
     hits_at_1 /= total_examples
     hits_at_10 /= total_examples
-    mrr = sum(reciprocal_ranks) / total_examples
-    map_metric = sum(average_precisions) / total_examples  # Calculate MAP
+    mrr = np.mean(reciprocal_ranks)
+    map_metric = np.mean(average_precisions)
 
     return {
         "HITS@1": hits_at_1,
