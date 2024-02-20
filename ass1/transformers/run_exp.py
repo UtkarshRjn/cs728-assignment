@@ -22,10 +22,15 @@ if __name__ =="__main__":
     parser.add_argument('--dataset', type=str, default='fb15k', help='Dataset to use')
     parser.add_argument('--mask_train', type=bool, default=False, help='Masked training or not')
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs to train for')
+    parser.add_argument('--down_fac', type=int, default=1, help='Reduce the size of dataset by this factor')
     args = parser.parse_args()
 
     # Load data, ensure that data is at path: 'path'/'name'/[train|valid|test].txt
     train_triples, val_triples, test_triples = build_data(name = args.dataset,path = cur_path + '/datasets/')
+    train_triples = train_triples[:int(len(train_triples)/args.down_fac)]
+    val_triples = val_triples[:int(len(val_triples)/args.down_fac)]
+    test_triples = test_triples[:int(len(test_triples)/args.down_fac)]
+    
     entity_list = list(set([x[0] for x in train_triples] + [x[2] for x in train_triples] + [x[0] for x in val_triples] + [x[2] for x in val_triples] + [x[0] for x in test_triples] + [x[2] for x in test_triples]))
     relation_list = list(set([x[1] for x in train_triples] + [x[1] for x in val_triples] + [x[1] for x in test_triples]))
 
