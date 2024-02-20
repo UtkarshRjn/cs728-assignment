@@ -20,7 +20,7 @@ if __name__ =="__main__":
     )
 
     parser.add_argument('--dataset', type=str, default='fb15k', help='Dataset to use')
-    parser.add_argument('--mask_train', type=bool, default=False, help='Masked training or not')
+    parser.add_argument('--mask_train', action='store_true', help='Masked training or not')
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs to train for')
     parser.add_argument('--down_fac', type=int, default=1, help='Reduce the size of dataset by this factor')
     parser.add_argument('--save_path', type=str, default='model_checkpoint.pt', help='Path to save the trained model checkpoint')
