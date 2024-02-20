@@ -45,7 +45,7 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
 
             # Calculate MAP
             precisions = [1.0 / rank if sorted_indices[i] == true_idx else 0 for i in range(len(entity_list))]
-            precisions = np.array(precisions)
+            precisions = np.array(precisions, dtype=np.float32)
             if np.sum(precisions) > 0:
                 average_precisions.append(np.mean(precisions))
 
