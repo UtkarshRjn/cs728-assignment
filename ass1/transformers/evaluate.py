@@ -3,6 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, TensorDataset
 from dataset import *
+import torch.nn.functional as F
 
 def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=32):
     """
@@ -44,6 +45,7 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
 
             # Calculate MAP
             precisions = [1.0 / rank if sorted_indices[i] == true_idx else 0 for i in range(len(entity_list))]
+            precisions = np.array(precisions)
             if np.sum(precisions) > 0:
                 average_precisions.append(np.mean(precisions))
 
@@ -89,34 +91,40 @@ def batch_predict_triplet_scores(model, tokenizer, triplets, device, batch_size=
     
     return all_logits
 
-def evaluate_model2( model, tokenizer, test_data, entity_list, device):
+def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size=32):
     hits_at_1 = 0
     hits_at_10 = 0
     reciprocal_ranks = []
     average_precisions = []  
 
-    # Iterate through each test triplet
-    for s, r, o in tqdm(test_data, desc="Evaluating"):
-        # Prepare the masked queries
-        masked_head_query = f"[CLS] [MASK] [SEP1] {r} [SEP2] {o} [END]"
-        masked_tail_query = f"[CLS] {s} [SEP1] {r} [SEP2] [MASK] [END]"
+    # Iterate through test data in batches
+    for i in tqdm(range(0, len(test_data), batch_size), desc="Evaluating"):
+        batch_data = test_data[i:i+batch_size]
 
-        # Predict the ranking for the masked head entity
-        head_predictions = model_predict(masked_head_query, entity_list, model, tokenizer, device)
-        head_rank = 1 + [entity_id for entity_id, _ in head_predictions].index(s)  # Get rank of the correct entity
+        # Prepare masked queries for the batch
+        masked_head_queries = [f"[CLS] [MASK] [SEP1] {r} [SEP2] {o} [END]" for s, r, o in batch_data]
+        masked_tail_queries = [f"[CLS] {s} [SEP1] {r} [SEP2] [MASK] [END]" for s, r, o in batch_data]
 
-        # Predict the ranking for the masked tail entity
-        tail_predictions = model_predict(masked_tail_query, entity_list, model, tokenizer, device)
-        tail_rank = 1 + [entity_id for entity_id, _ in tail_predictions].index(o)
+        # Predict rankings for the masked head entities
+        head_predictions = model_predict(masked_head_queries, entity_list, model, tokenizer, device)
 
-        # Update metrics
-        hits_at_1 += (head_rank == 1) + (tail_rank == 1)
-        hits_at_10 += (head_rank <= 10) + (tail_rank <= 10)
-        reciprocal_ranks.append(1 / head_rank)
-        reciprocal_ranks.append(1 / tail_rank)
+        # Predict rankings for the masked tail entities
+        tail_predictions = model_predict(masked_tail_queries, entity_list, model, tokenizer, device)
 
-        average_precisions.append(1 / head_rank)
-        average_precisions.append(1 / tail_rank)
+        # Iterate through each triplet in the batch
+        for j, (s, r, o) in enumerate(batch_data):
+            # Get ranks of the correct entities
+            head_rank = 1 + [entity_id for entity_id, _ in head_predictions[j]].index(s)
+            tail_rank = 1 + [entity_id for entity_id, _ in tail_predictions[j]].index(o)
+
+            # Update metrics
+            hits_at_1 += (head_rank == 1) + (tail_rank == 1)
+            hits_at_10 += (head_rank <= 10) + (tail_rank <= 10)
+            reciprocal_ranks.append(1 / head_rank)
+            reciprocal_ranks.append(1 / tail_rank)
+
+            average_precisions.append(1 / head_rank)
+            average_precisions.append(1 / tail_rank)
 
     # Calculate final metrics
     total_examples = 2 * len(test_data)  # Each test triplet results in two queries
@@ -133,44 +141,45 @@ def evaluate_model2( model, tokenizer, test_data, entity_list, device):
     }
 
 
-
-def model_predict(masked_query, entity_list, model, tokenizer, device):
+def model_predict(masked_queries, entity_list, model, tokenizer, device):
     """
-    Predicts the ranking of entities for a masked query.
+    Predicts the ranking of entities for masked queries in batch.
 
     Args:
-    - masked_query (str): The input text with one entity masked.
+    - masked_queries (list): List of masked query strings.
     - entity_list (list): List of all possible entity IDs (strings).
     - model (ModifiedTransformerModel): The trained model.
     - tokenizer (transformers.PreTrainedTokenizer): The tokenizer.
     - device (torch.device): The device to run the prediction on.
 
     Returns:
-    - List of tuples (entity_id, score) sorted by descending score.
+    - List of lists of tuples (entity_id, score) sorted by descending score.
     """
+    # Tokenize the input batch
+    input_ids = [tokenizer.tokenize(query).to(device) for query in masked_queries]
 
-    # Tokenize the input
-    input_ids = tokenizer.tokenize(masked_query)
-    input_ids = torch.tensor(input_ids).unsqueeze(0).to(device)
     # Get model predictions
     with torch.no_grad():
-        logits = model(input_ids)
+        logits = [model(ids) for ids in input_ids]
 
-    # Identify the masked position index
-    mask_token_index = input_ids[0].tolist().index(tokenizer.mask_token_id)
+    # Process logits and scores for each query in the batch
+    batch_results = []
+    for logit in logits:
+        # Extract logits for the masked position; shape: (seq_length, vocab_size)
+        mask_logits = logit[0, :, :]
 
-    # Extract logits for the masked position; shape: (vocab_size,)
-    mask_logits = logits[0, mask_token_index, :]
+        # Apply softmax to get probabilities
+        mask_probs = F.softmax(mask_logits, dim=-1)
 
-    # Score each entity in the entity list
-    entity_scores = []
-    for entity_id in entity_list:
-        entity_token_id = tokenizer.token2idx[entity_id]
-        entity_score = mask_logits[entity_token_id].item()  # Logit for the entity
-        entity_scores.append((entity_id, entity_score))
+        # Score each entity in the entity list
+        entity_scores = []
+        for entity_id in entity_list:
+            entity_token_id = tokenizer.token2idx[entity_id]
+            entity_score = mask_probs[0, entity_token_id].item()  # Probability for the entity
+            entity_scores.append((entity_id, entity_score))
 
-    # Sort by descending score
-    ranked_entities = sorted(entity_scores, key=lambda x: x[1], reverse=True)
+        # Sort by descending score
+        ranked_entities = sorted(entity_scores, key=lambda x: x[1], reverse=True)
+        batch_results.append(ranked_entities)
 
-    return ranked_entities
-
+    return batch_results
