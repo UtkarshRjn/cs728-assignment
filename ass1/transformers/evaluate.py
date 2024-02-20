@@ -114,8 +114,8 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
         # Iterate through each triplet in the batch
         for j, (s, r, o) in enumerate(batch_data):
             # Get ranks of the correct entities
-            head_rank = 1 + [entity_id for entity_id, _ in head_predictions[j]].index(s)
-            tail_rank = 1 + [entity_id for entity_id, _ in tail_predictions[j]].index(o)
+            head_rank = 1 + head_predictions[j].index(s)
+            tail_rank = 1 + tail_predictions[j].index(o)
 
             # Update metrics
             hits_at_1 += (head_rank == 1) + (tail_rank == 1)
@@ -144,42 +144,36 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
 def model_predict(masked_queries, entity_list, model, tokenizer, device):
     """
     Predicts the ranking of entities for masked queries in batch.
-
-    Args:
-    - masked_queries (list): List of masked query strings.
-    - entity_list (list): List of all possible entity IDs (strings).
-    - model (ModifiedTransformerModel): The trained model.
-    - tokenizer (transformers.PreTrainedTokenizer): The tokenizer.
-    - device (torch.device): The device to run the prediction on.
-
-    Returns:
-    - List of lists of tuples (entity_id, score) sorted by descending score.
     """
+    
     # Tokenize the input batch
-    input_ids = [tokenizer.tokenize(query).to(device) for query in masked_queries]
+    input_ids = [tokenizer.tokenize(query) for query in masked_queries]
+    input_ids = torch.stack(input_ids).to(device)
 
-    # Get model predictions
+    # Ensure input is of shape [seq_len, batch_size]
+    input_ids = input_ids.transpose(0, 1)
+
     with torch.no_grad():
-        logits = [model(ids) for ids in input_ids]
+        logits = model(input_ids)  # Assuming logits shape is [seq_len, batch_size, ntoken]
 
-    # Process logits and scores for each query in the batch
     batch_results = []
-    for logit in logits:
-        # Extract logits for the masked position; shape: (seq_length, vocab_size)
-        mask_logits = logit[0, :, :]
+    for i in range(logits.size(1)):  # Iterate over batch dimension
+        # Softmax over the vocabulary dimension
+        scores = F.softmax(logits[:, i, :], dim=-1)
 
-        # Apply softmax to get probabilities
-        mask_probs = F.softmax(mask_logits, dim=-1)
+        # Get the last timestep scores assuming [MASK] or [END] token is the target
+        last_scores = scores[-1]
 
-        # Score each entity in the entity list
         entity_scores = []
         for entity_id in entity_list:
-            entity_token_id = tokenizer.token2idx[entity_id]
-            entity_score = mask_probs[0, entity_token_id].item()  # Probability for the entity
-            entity_scores.append((entity_id, entity_score))
+            entity_index = tokenizer.token2idx.get(entity_id, None)
+            if entity_index is not None:
+                # Safely extract score for entity_id if it exists in tokenizer
+                entity_score = last_scores[entity_index].item()
+                entity_scores.append((entity_id, entity_score))
 
-        # Sort by descending score
+        # Sort entities by their scores in descending order
         ranked_entities = sorted(entity_scores, key=lambda x: x[1], reverse=True)
-        batch_results.append(ranked_entities)
+        batch_results.append([entity_id for entity_id, _ in ranked_entities])
 
     return batch_results
