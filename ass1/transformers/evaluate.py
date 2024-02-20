@@ -151,7 +151,7 @@ def model_predict(masked_query, entity_list, model, tokenizer, device):
 
     # Tokenize the input
     input_ids = tokenizer.tokenize(masked_query)
-    input_ids = torch.tensor(input_ids).unsqueeze(0)
+    input_ids = torch.tensor(input_ids).unsqueeze(0).to(device)
     # Get model predictions
     with torch.no_grad():
         logits = model(input_ids)
