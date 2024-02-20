@@ -34,6 +34,7 @@ if __name__ =="__main__":
     vocab.append('[MASK]')
 
     ntoken = len(vocab)  # Number of tokens in your vocabulary
+    print(f"Vocab size: {ntoken}")
     d_model = 256  # Embedding dimension
     nhead = 4  # Number of attention heads
     d_hid = 512  # Hidden dimension
