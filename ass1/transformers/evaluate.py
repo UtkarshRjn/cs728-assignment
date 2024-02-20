@@ -92,6 +92,10 @@ def batch_predict_triplet_scores(model, tokenizer, triplets, device, batch_size=
     return all_logits
 
 def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size=32):
+    
+    model.to(device)
+    model.eval()
+
     hits_at_1 = 0
     hits_at_10 = 0
     reciprocal_ranks = []
@@ -145,7 +149,7 @@ def model_predict(masked_queries, entity_list, model, tokenizer, device):
     """
     Predicts the ranking of entities for masked queries in batch.
     """
-    
+
     # Tokenize the input batch
     input_ids = [tokenizer.tokenize(query) for query in masked_queries]
     input_ids = torch.stack(input_ids).to(device)
