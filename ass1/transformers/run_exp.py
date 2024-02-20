@@ -23,6 +23,9 @@ if __name__ =="__main__":
     parser.add_argument('--mask_train', type=bool, default=False, help='Masked training or not')
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs to train for')
     parser.add_argument('--down_fac', type=int, default=1, help='Reduce the size of dataset by this factor')
+    parser.add_argument('--save_path', type=str, default='model_checkpoint.pt', help='Path to save the trained model checkpoint')
+    parser.add_argument('--load_path', type=str, help='Path to load a pre-trained model checkpoint')
+    parser.add_argument('--no_train', action='store_true', help='Do not train the model, only evaluate')
     args = parser.parse_args()
 
     # Load data, ensure that data is at path: 'path'/'name'/[train|valid|test].txt
@@ -67,16 +70,26 @@ if __name__ =="__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     
-    epochs = args.num_epochs
+    # Load a pre-trained model if specified
+    if args.load_path:
+        model.load_state_dict(torch.load(args.load_path))
+        model.to(device)
+        print(f"Model loaded from {args.load_path}")
 
-    for epoch in range(epochs):
-        
-        if not args.mask_train:
-            loss = train(model, train_loader, optimizer, criterion, device)
-        else:
-            loss = train2(model, train_loader, optimizer, criterion, device)
-        
-        print(f"Epoch {epoch+1}, Loss: {loss}")
+    if not args.no_train:
+        epochs = args.num_epochs
+
+        for epoch in range(epochs):
+            
+            if not args.mask_train:
+                loss = train(model, train_loader, optimizer, criterion, device)
+            else:
+                loss = train2(model, train_loader, optimizer, criterion, device)
+            
+            print(f"Epoch {epoch+1}, Loss: {loss}")
+
+        torch.save(model.state_dict(), args.save_path)
+        print(f"Model saved to {args.save_path}")
 
     # Evaluate on test set
     if not args.mask_train:

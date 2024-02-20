@@ -37,7 +37,7 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
     reciprocal_ranks = []
     average_precisions = []
 
-    for triplet in tqdm(test_data, desc="Evaluating"):
+    for i, triplet in enumerate(tqdm(test_data, desc="Evaluating")):
         head, relation, tail = triplet
         
         # Prepare batches for head replacement
@@ -60,6 +60,14 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
             hits_at_10_list.append(hits_at_10)
             reciprocal_ranks.append(rr)
             average_precisions.append(ap)
+        
+        # Report metrics every 50 iterations
+        if (i + 1) % 50 == 0:
+            interim_hits_at_1 = np.mean(hits_at_1_list)
+            interim_hits_at_10 = np.mean(hits_at_10_list)
+            interim_mrr = np.mean(reciprocal_ranks)
+            interim_map = np.mean(average_precisions)
+            print(f"Iteration {i+1}: HITS@1 = {interim_hits_at_1}, HITS@10 = {interim_hits_at_10}, MRR = {interim_mrr}, MAP = {interim_map}")
 
     # Calculate final metric values
     final_hits_at_1 = np.mean(hits_at_1_list)
@@ -140,6 +148,15 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
 
             average_precisions.append(1 / head_rank)
             average_precisions.append(1 / tail_rank)
+
+        # Report metrics at specified intervals
+        if (i + 1) % 50 == 0 or (i + 1) == len(test_data) // batch_size:
+            interim_hits_at_1 = hits_at_1 / (2 * num_examples_processed)  # Each example contributes twice (head and tail)
+            interim_hits_at_10 = hits_at_10 / (2 * num_examples_processed)
+            interim_mrr = np.mean(reciprocal_ranks)
+            interim_map = np.mean(average_precisions)
+            print(f"After {num_examples_processed} examples: HITS@1 = {interim_hits_at_1}, HITS@10 = {interim_hits_at_10}, MRR = {interim_mrr}, MAP = {interim_map}")
+
 
     # Calculate final metrics
     total_examples = 2 * len(test_data)  # Each test triplet results in two queries
