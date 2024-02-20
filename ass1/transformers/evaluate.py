@@ -134,6 +134,7 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
         # Predict rankings for the masked tail entities
         tail_predictions = model_predict(masked_tail_queries, entity_list, model, tokenizer, device)
 
+
         # Iterate through each triplet in the batch
         for j, (s, r, o) in enumerate(batch_data):
             # Get ranks of the correct entities
@@ -148,6 +149,8 @@ def evaluate_model2(model, tokenizer, test_data, entity_list, device, batch_size
 
             average_precisions.append(1 / head_rank)
             average_precisions.append(1 / tail_rank)
+
+        num_examples_processed += len(batch_data)
 
         # Report metrics at specified intervals
         if (i + 1) % 50 == 0 or (i + 1) == len(test_data) // batch_size:
