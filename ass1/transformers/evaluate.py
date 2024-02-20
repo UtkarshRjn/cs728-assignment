@@ -5,6 +5,26 @@ from torch.utils.data import DataLoader, TensorDataset
 from dataset import *
 import torch.nn.functional as F
 
+def calculate_metrics(scores, true_idx):
+    # Sort scores in descending order and get the sorted indices
+    sorted_indices = np.argsort(-scores)
+    
+    # Find the rank of the true entity (add 1 because ranks start at 1, not 0)
+    true_rank = np.where(sorted_indices == true_idx)[0][0] + 1
+    
+    # Calculate Hits@1, Hits@10
+    hits_at_1 = int(true_rank == 1)
+    hits_at_10 = int(true_rank <= 10)
+    
+    # Calculate Reciprocal Rank
+    reciprocal_rank = 1.0 / true_rank
+    
+    # Calculate Precision at Each Relevant Rank for MAP Calculation
+    precisions = [1.0 / rank for rank, idx in enumerate(sorted_indices, start=1) if idx == true_idx]
+    average_precision = np.mean(precisions) if precisions else 0
+
+    return hits_at_1, hits_at_10, reciprocal_rank, average_precision
+
 def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=32):
     """
     Fast evaluation of the model using batch processing.
@@ -12,8 +32,8 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
     model.to(device)
     model.eval()
     
-    hits_at_1_count = 0
-    hits_at_10_count = 0
+    hits_at_1_list = []
+    hits_at_10_list = []
     reciprocal_ranks = []
     average_precisions = []
 
@@ -32,29 +52,20 @@ def evaluate_model(model, tokenizer, test_data, entity_list, device, batch_size=
             scores = scores.cpu().numpy()  # Assuming scores are logits or probabilities
             true_idx = entity_list.index(true_entity)
             
-            # Calculate rankings
-            sorted_indices = np.argsort(-scores)  # Assuming higher score indicates better match
-            rank = np.where(sorted_indices == true_idx)[0] + 1
+            # Calculate metrics for this pair of scores and true entity
+            hits_at_1, hits_at_10, rr, ap = calculate_metrics(scores, true_idx)
             
-            if rank == 1:
-                hits_at_1_count += 1
-            if rank <= 10:
-                hits_at_10_count += 1
-            
-            reciprocal_ranks.append(1.0 / rank)
+            # Append metrics to their respective lists
+            hits_at_1_list.append(hits_at_1)
+            hits_at_10_list.append(hits_at_10)
+            reciprocal_ranks.append(rr)
+            average_precisions.append(ap)
 
-            # Calculate MAP
-            precisions = [1.0 / rank if sorted_indices[i] == true_idx else 0 for i in range(len(entity_list))]
-            precisions = np.array(precisions, dtype=np.float32)
-            if np.sum(precisions) > 0:
-                average_precisions.append(np.mean(precisions))
-
-    # Calculate final metrics
-    num_evaluations = 2 * len(test_data)  # Each test triplet is evaluated twice (head and tail replacement)
-    hits_at_1 = hits_at_1_count / num_evaluations
-    hits_at_10 = hits_at_10_count / num_evaluations
+    # Calculate final metric values
+    final_hits_at_1 = np.mean(hits_at_1_list)
+    final_hits_at_10 = np.mean(hits_at_10_list)
     mrr = np.mean(reciprocal_ranks)
-    map_score = np.mean(average_precisions) if average_precisions else 0
+    map_score = np.mean(average_precisions)
 
     return {
         "HITS@1": hits_at_1,
